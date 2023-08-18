@@ -15,7 +15,7 @@ local function get_call_locations(call_hierarchy_item, ctx)
     local client = vim.lsp.get_client_by_id(ctx.client_id)
     if client then
         local result, err = client.request_sync(method, { item = call_hierarchy_item }, timeout_ms, -1)
-        if err then
+        if err and err.message then
             vim.notify(err.message, vim.log.levels.WARN)
             return
         end
