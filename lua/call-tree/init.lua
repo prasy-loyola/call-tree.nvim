@@ -63,7 +63,7 @@ local function get_call_locations(call_hierarchy_item, ctx)
   end
 end
 
-
+                                                                                                                                                                                      
 --- Create a window for the buffer
 -- @param buf buffer number
 local function show_window(buf)
@@ -71,7 +71,7 @@ local function show_window(buf)
     relative = "editor",
     width = 100,
     height = 20,
-    col = 150,
+    col = vim.api.nvim_win_get_width(0) - 100 -2,
     row = 2,
     anchor = "NW",
     style = "minimal",
