@@ -1,16 +1,16 @@
 local util = vim.lsp.util
 
 local M = {}
-local p = { -- private object to store plugin state
-  id = nil, -- bufnr of the call tree buffer
-  wid = nil, -- window id of the call tree window
+local p = {            -- private object to store plugin state
+  id = nil,            -- bufnr of the call tree buffer
+  wid = nil,           -- window id of the call tree window
   flattened_tree = {}, -- flattened representation of the call tree
-  context = nil, -- LSP context
-  call_tree = nil, -- current call tree
+  context = nil,       -- LSP context
+  call_tree = nil,     -- current call tree
   config = {
-    inverted = true, -- Should the tree be inverted
+    inverted = true,   -- Should the tree be inverted
     lsp = {
-      timeout = 200 -- timeout for LSP calls
+      timeout = 200    -- timeout for LSP calls
     }
   }
 }
@@ -34,7 +34,8 @@ end
 local function get_call_locations(call_hierarchy_item, ctx)
   local client = vim.lsp.get_client_by_id(ctx.client_id)
   if client then
-    local result, err = client.request_sync(incoming_calls_method, { item = call_hierarchy_item }, p.config.lsp.timeout, -1)
+    local result, err = client.request_sync(incoming_calls_method, { item = call_hierarchy_item }, p.config.lsp.timeout,
+      -1)
     if err and err.message then
       vim.notify(err.message, vim.log.levels.WARN)
       return
@@ -87,18 +88,14 @@ end
 -- @param depth of this item in the whole call tree
 -- @param item call tree item
 function p.config.display_text(depth, item)
-  local inverted_offset = 0
-
-  if p.config.inverted then
-    inverted_offset = 1
-  end
-
   local connector = "╚═"
-  if depth < (1 + inverted_offset) then
-    connector = ""
+  if depth < 1 then
+    connector = "*-"
+  elseif not item.incoming or #item.incoming == 0 then
+    connector = "*-"
   end
 
-  return string.rep(" ", (depth - 1 - inverted_offset) * 2) .. connector .. item.text
+  return string.rep(" ", (depth - 1) * 2) .. connector .. item.text
 end
 
 local function tree_to_list(tree, list, depth)

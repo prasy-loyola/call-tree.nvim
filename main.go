@@ -12,6 +12,10 @@ func sayHello() {
 	say("hello world")
 }
 
+func produceWorld() {
+    newWorld()
+}
+
 func newWorld() {
     sayHello()
 }
@@ -19,6 +23,7 @@ func newWorld() {
 func main() {
 	sayHello()
 	sayHello()
+    produceWorld()
 }
 
 
