@@ -1,20 +1,24 @@
 local util = vim.lsp.util
 
 local M = {}
-local p = {
-  id = nil,
-  wid = nil,
-  tree = {},
-  context = nil,
-  call_tree = nil,
+local p = { -- private object to store plugin state
+  id = nil, -- bufnr of the call tree buffer
+  wid = nil, -- window id of the call tree window
+  flattened_tree = {}, -- flattened representation of the call tree
+  context = nil, -- LSP context
+  call_tree = nil, -- current call tree
   config = {
+    inverted = false, -- Should the tree be inverted
     lsp = {
-      timeout = 200
+      timeout = 200 -- timeout for LSP calls
     }
   }
 }
 local incoming_calls_method = "callHierarchy/incomingCalls"
 
+
+--- Map a call tree item to internal representation
+-- @param call_hierarchy_item call tree item
 local function map_to_item(call_hierarchy_item)
   return {
     filename = assert(vim.uri_to_fname(call_hierarchy_item.uri)),
@@ -24,6 +28,9 @@ local function map_to_item(call_hierarchy_item)
   }
 end
 
+--- Get all incoming call location for a call tree item
+-- @param call_hierarchy_item call tree item
+-- @param ctx LSP context
 local function get_call_locations(call_hierarchy_item, ctx)
   local client = vim.lsp.get_client_by_id(ctx.client_id)
   if client then
@@ -56,6 +63,8 @@ local function get_call_locations(call_hierarchy_item, ctx)
 end
 
 
+--- Create a window for the buffer
+-- @param buf buffer number
 local function show_window(buf)
   local opts = {
     relative = "editor",
@@ -74,6 +83,9 @@ local function show_window(buf)
 end
 
 
+--- Function to create display text for a call tree item
+-- @param depth of this item in the whole call tree
+-- @param item call tree item
 function p.config.display_text(depth, item)
   return string.rep("-", depth * 2) .. item.text
 end
@@ -87,6 +99,8 @@ local function tree_to_list(tree, list, depth)
   end
 end
 
+--- Map a call tree to a flattened_tree and lines to display in buffer
+-- @param call_tree a call tree
 local function map_call_tree(call_tree)
   local tree = {}
   tree_to_list(call_tree, tree, 0)
@@ -98,16 +112,20 @@ local function map_call_tree(call_tree)
   return tree, lines
 end
 
+
+--- Find and add the incoming calls for function under cursor and update buffer
+-- @param line_num current line number in the call tree buffer
 local function expand_function(line_num)
-  local result = get_call_locations(p.tree[line_num].call_hierarchy_item, p.ctx)
+  local result = get_call_locations(p.flattened_tree[line_num].call_hierarchy_item, p.ctx)
   if result then
-    p.tree[line_num].incoming = result
+    p.flattened_tree[line_num].incoming = result
     local tree, lines = map_call_tree(p.call_tree)
-    p.tree = tree
+    p.flattened_tree = tree
     vim.api.nvim_buf_set_lines(p.id, 0, -1, true, lines)
   end
 end
 
+--- Show call-tree for the function under cursor
 function M.show_call_tree()
   local params = util.make_position_params()
   vim.lsp.buf_request(0, "textDocument/prepareCallHierarchy", params,
@@ -130,7 +148,7 @@ function M.show_call_tree()
       p.ctx = ctx
       p.call_tree = { item }
       local tree, lines = map_call_tree(p.call_tree)
-      p.tree = tree
+      p.flattened_tree = tree
       vim.api.nvim_buf_set_lines(p.id, 0, -1, true, lines)
       p.wid = show_window(p.id)
       vim.keymap.set('n', '<Tab>', function()
@@ -140,8 +158,10 @@ function M.show_call_tree()
     end)
 end
 
+--- Setup call-tree plugin
+-- @param opt config
 function M.setup(opt)
-  p.config = vim.tbl_deep_extend("force", {}, opt or {})
+  p.config = vim.tbl_deep_extend("force", p.config or {}, opt or {})
 end
 
 return M
