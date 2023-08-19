@@ -87,24 +87,36 @@ end
 -- @param depth of this item in the whole call tree
 -- @param item call tree item
 function p.config.display_text(depth, item)
+  local inverted_offset = 0
+
+  if p.config.inverted then
+    inverted_offset = 1
+  end
+
   local connector = "╚═"
-  if depth == 1 then
+  if depth < (1 + inverted_offset) then
     connector = ""
   end
 
-  return string.rep(" ", (depth - 2) * 2) .. connector .. item.text
+  return string.rep(" ", (depth - 1 - inverted_offset) * 2) .. connector .. item.text
 end
 
 local function tree_to_list(tree, list, depth)
   if not tree then return depth end
   local max_depth = depth
   for _, item in pairs(tree) do
+    if not p.config.inverted then
+      item.display_text = p.config.display_text(depth, item)
+      table.insert(list, item)
+    end
     local inner_depth = tree_to_list(item.incoming, list, depth + 1)
     if inner_depth > max_depth then
       max_depth = inner_depth
     end
-    item.display_text = p.config.display_text(max_depth - depth, item)
-    table.insert(list, item)
+    if p.config.inverted then
+      item.display_text = p.config.display_text(max_depth - depth, item)
+      table.insert(list, item)
+    end
   end
   return max_depth
 end
