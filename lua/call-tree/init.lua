@@ -8,7 +8,7 @@ local p = { -- private object to store plugin state
   context = nil, -- LSP context
   call_tree = nil, -- current call tree
   config = {
-    inverted = false, -- Should the tree be inverted
+    inverted = true, -- Should the tree be inverted
     lsp = {
       timeout = 200 -- timeout for LSP calls
     }
@@ -87,16 +87,26 @@ end
 -- @param depth of this item in the whole call tree
 -- @param item call tree item
 function p.config.display_text(depth, item)
-  return string.rep("-", depth * 2) .. item.text
+  local connector = "╚═"
+  if depth == 1 then
+    connector = ""
+  end
+
+  return string.rep(" ", (depth - 2) * 2) .. connector .. item.text
 end
 
 local function tree_to_list(tree, list, depth)
-  if not tree then return end
+  if not tree then return depth end
+  local max_depth = depth
   for _, item in pairs(tree) do
-    item.display_text = p.config.display_text(depth, item)
+    local inner_depth = tree_to_list(item.incoming, list, depth + 1)
+    if inner_depth > max_depth then
+      max_depth = inner_depth
+    end
+    item.display_text = p.config.display_text(max_depth - depth, item)
     table.insert(list, item)
-    tree_to_list(item.incoming, list, depth + 1)
   end
+  return max_depth
 end
 
 --- Map a call tree to a flattened_tree and lines to display in buffer
