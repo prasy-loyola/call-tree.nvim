@@ -13,17 +13,15 @@ func sayHello() {
 }
 
 func produceWorld() {
-    newWorld()
+	newWorld()
 }
 
 func newWorld() {
-    sayHello()
+	sayHello()
 }
 
 func main() {
 	sayHello()
 	sayHello()
-    produceWorld()
+	produceWorld()
 }
-
-
