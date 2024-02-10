@@ -1,77 +1,90 @@
 local util = vim.lsp.util
+local graph = require('call-tree.graph')
 
 local M = {}
-local p = {            -- private object to store plugin state
-  id = nil,            -- bufnr of the call tree buffer
-  wid = nil,           -- window id of the call tree window
-  flattened_tree = {}, -- flattened representation of the call tree
-  context = nil,       -- LSP context
-  call_tree = nil,     -- current call tree
+
+---@class Config
+---@field inverted boolean default(true) should tree be inverted
+---@field lsp LspConfig
+
+---@class LspConfig
+---@field timeout integer default(200ms) timeout for LSP calls
+
+---@class PluginState private object to store plugin state
+---@field private id? integer  bufnr of the call tree buffer
+---@field private wid? integer window id of the call tree window
+---@field private ctx? LspContext
+---@field private root? Node
+---@field private config? Config
+---@field private cur_item? Node
+local p = {
+  id = nil,
+  wid = nil,
+  ctx = nil,
+  cur_item = nil,
+  root = nil,
   config = {
-    inverted = true,   -- Should the tree be inverted
+    inverted = true,
     lsp = {
-      timeout = 200    -- timeout for LSP calls
-    }
+      timeout = 200
+    },
   }
 }
 local incoming_calls_method = "callHierarchy/incomingCalls"
 
+---@class LspContext
+---@field client_id integer
 
---- Map a call tree item to internal representation
--- @param call_hierarchy_item call tree item
-local function map_to_item(call_hierarchy_item)
-  return {
-    filename = assert(vim.uri_to_fname(call_hierarchy_item.uri)),
-    text = call_hierarchy_item.name,
-    call_hierarchy_item = call_hierarchy_item,
-    places = {}
-  }
-end
+---@class Position
+---@field line integer
+---@field character integer
+
+---@class Range
+---@field start Position
+---@field end Position
+
+---@class CallHierarchyIncomingCall
+---@field from CallHierarchyItem
+---@field	fromRanges Range[]
 
 --- Get all incoming call location for a call tree item
--- @param call_hierarchy_item call tree item
--- @param ctx LSP context
-local function get_call_locations(call_hierarchy_item, ctx)
+---@param item Node
+---@param ctx LspContext
+---@return nil
+local function get_call_locations(item, ctx)
   local client = vim.lsp.get_client_by_id(ctx.client_id)
   if client then
-    local result, err = client.request_sync(incoming_calls_method, { item = call_hierarchy_item }, p.config.lsp.timeout,
-      -1)
+    local result, err = client.request_sync(incoming_calls_method, { item = item.item }, p.config.lsp.timeout, -1)
     if err and err.message then
       vim.notify(err.message, vim.log.levels.WARN)
       return
     end
     if not result then return end
 
-    local items = {}
     for _, call_hierarchy_call in pairs(result.result) do
-      call_hierarchy_item = call_hierarchy_call["from"]
-      local item = map_to_item(call_hierarchy_item)
-      table.insert(items, item)
-      for _, range in pairs(call_hierarchy_call.fromRanges) do
-        table.insert(item.places, {
-          lnum = range.start.line + 1,
-          col = range.start.character + 1,
-        })
-      end
+      ---@type CallHierarchyItem
+      local call_site = call_hierarchy_call["from"]
+      item:addIncoming(graph.Node.create(call_site))
     end
-    return items
+    item.probed = true
   else
     vim.notify(
       string.format('Client with id=%d disappeared during call hierarchy request', ctx.client_id),
       vim.log.levels.WARN
     )
+    return
   end
 end
 
-                                                                                                                                                                                      
+
 --- Create a window for the buffer
--- @param buf buffer number
+---@param buf integer buffer number
 local function show_window(buf)
   local opts = {
     relative = "editor",
     width = 100,
     height = 20,
-    col = vim.api.nvim_win_get_width(0) - 100 -2,
+    col = vim.api.nvim_win_get_width(0) - 100 - 2,
     row = 2,
     anchor = "NW",
     style = "minimal",
@@ -83,66 +96,45 @@ local function show_window(buf)
   return win
 end
 
-
---- Function to create display text for a call tree item
--- @param depth of this item in the whole call tree
--- @param item call tree item
-function p.config.display_text(depth, item)
-  local connector = "╚═"
-  if depth < 1 then
-    connector = "*-"
-  elseif not item.incoming or #item.incoming == 0 then
-    connector = "*-"
-  end
-
-  return string.rep(" ", (depth - 1) * 2) .. connector .. item.text
-end
-
-local function tree_to_list(tree, list, depth)
-  if not tree then return depth end
-  local max_depth = depth
-  for _, item in pairs(tree) do
-    if not p.config.inverted then
-      item.display_text = p.config.display_text(depth, item)
-      table.insert(list, item)
-    end
-    local inner_depth = tree_to_list(item.incoming, list, depth + 1)
-    if inner_depth > max_depth then
-      max_depth = inner_depth
-    end
-    if p.config.inverted then
-      item.display_text = p.config.display_text(max_depth - depth, item)
-      table.insert(list, item)
-    end
-  end
-  return max_depth
-end
-
---- Map a call tree to a flattened_tree and lines to display in buffer
--- @param call_tree a call tree
-local function map_call_tree(call_tree)
-  local tree = {}
-  tree_to_list(call_tree, tree, 0)
-  local lines = {}
-  for _, item in pairs(tree) do
-    table.insert(lines, item.display_text)
-  end
-
-  return tree, lines
-end
-
-
 --- Find and add the incoming calls for function under cursor and update buffer
--- @param line_num current line number in the call tree buffer
+---@param line_num integer current line number in the call tree buffer
 local function expand_function(line_num)
-  local result = get_call_locations(p.flattened_tree[line_num].call_hierarchy_item, p.ctx)
-  if result then
-    p.flattened_tree[line_num].incoming = result
-    local tree, lines = map_call_tree(p.call_tree)
-    p.flattened_tree = tree
-    vim.api.nvim_buf_set_lines(p.id, 0, -1, true, lines)
+  local item = p.root:get_item_at(line_num)
+  if not item or item.probed then
+    return
   end
+  get_call_locations(item, p.ctx)
+  local lines = p.root:get_display_rows(true)
+  vim.api.nvim_buf_set_lines(p.id, 0, -1, true, lines)
 end
+
+
+local function create_window_with_tree()
+  p.id = vim.api.nvim_create_buf(false, true)
+  local lines = p.root:get_display_rows(true)
+  vim.api.nvim_buf_set_lines(p.id, 0, -1, true, lines)
+  p.wid = show_window(p.id)
+  vim.keymap.set('n', '<Tab>', function()
+    local row, _ = unpack(vim.api.nvim_win_get_cursor(0))
+    expand_function(row)
+  end, { buffer = p.id })
+
+  vim.api.nvim_create_autocmd({ "CursorMoved" }, {
+    buffer = p.id,
+    callback = function()
+      local row, _ = unpack(vim.api.nvim_win_get_cursor(0))
+      local item = p.root:get_item_at(row)
+      if item then
+        p.cur_item:setFocused(false)
+        item:setFocused(true)
+        p.cur_item = item
+        local newlines = p.root:get_display_rows(false)
+        vim.api.nvim_buf_set_lines(p.id, 0, -1, true, newlines)
+      end
+    end
+  })
+end
+
 
 --- Show call-tree for the function under cursor
 function M.show_call_tree()
@@ -156,29 +148,19 @@ function M.show_call_tree()
       if not result then return end
 
       --TODO: assuming only 1 call heirarchy, need to support for multiple
+      ---@type CallHierarchyItem
       local call_hierarchy_item = result[1]
-      local items = get_call_locations(call_hierarchy_item, ctx)
-      if not items then
-        return
-      end
-      local item = map_to_item(call_hierarchy_item)
-      item.incoming = items
-      p.id = vim.api.nvim_create_buf(false, true)
+      local item = graph.Node.create(call_hierarchy_item)
+      get_call_locations(item, ctx)
       p.ctx = ctx
-      p.call_tree = { item }
-      local tree, lines = map_call_tree(p.call_tree)
-      p.flattened_tree = tree
-      vim.api.nvim_buf_set_lines(p.id, 0, -1, true, lines)
-      p.wid = show_window(p.id)
-      vim.keymap.set('n', '<Tab>', function()
-        local row, _ = unpack(vim.api.nvim_win_get_cursor(0))
-        expand_function(row)
-      end, { buffer = p.id })
+      p.root = item
+      p.cur_item = item
+      create_window_with_tree()
     end)
 end
 
 --- Setup call-tree plugin
--- @param opt config
+---@param opt Config
 function M.setup(opt)
   p.config = vim.tbl_deep_extend("force", p.config or {}, opt or {})
 end
