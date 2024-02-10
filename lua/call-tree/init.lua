@@ -97,9 +97,8 @@ local function show_window(buf)
 end
 
 --- Find and add the incoming calls for function under cursor and update buffer
----@param line_num integer current line number in the call tree buffer
-local function expand_function(line_num)
-  local item = p.root:get_item_at(line_num)
+---@param item Node current line number in the call tree buffer
+local function expand_function(item)
   if not item or item.probed then
     return
   end
@@ -115,8 +114,12 @@ local function create_window_with_tree()
   vim.api.nvim_buf_set_lines(p.id, 0, -1, true, lines)
   p.wid = show_window(p.id)
   vim.keymap.set('n', '<Tab>', function()
-    local row, _ = unpack(vim.api.nvim_win_get_cursor(0))
-    expand_function(row)
+    if not p.cur_item.probed then
+      expand_function(p.cur_item)
+    end
+    p.cur_item.expand = not p.cur_item.expand
+    local newlines = p.root:get_display_rows(true)
+    vim.api.nvim_buf_set_lines(p.id, 0, -1, true, newlines)
   end, { buffer = p.id })
 
   vim.api.nvim_create_autocmd({ "CursorMoved" }, {

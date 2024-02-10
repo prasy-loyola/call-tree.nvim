@@ -33,7 +33,7 @@ function Node.create(item)
     item = item,
     filename = assert(vim.uri_to_fname(item.uri)),
     incoming = {},
-    expand = true,
+    expand = false,
     flattened = {},
     depth = 0,
   }, Node)
@@ -78,6 +78,9 @@ end
 function Node:flatten()
   self.flattened = {}
   table.insert(self.flattened, self)
+  if not self.expand then
+    return self.flattened
+  end
   for _, n in ipairs(self.incoming) do
     for _, cn in ipairs(n:flatten()) do
       table.insert(self.flattened, cn)
@@ -124,6 +127,11 @@ function Node:get_display_rows(refresh)
           indent = indent .. " "
         end
       end
+    end
+    if n.expand then
+      indent = indent.."▼"
+    else
+      indent = indent.."▶"
     end
     table.insert(text, indent .. n.name )
   end
