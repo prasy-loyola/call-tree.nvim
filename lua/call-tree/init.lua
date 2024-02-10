@@ -125,8 +125,8 @@ local function create_window_with_tree()
       local row, _ = unpack(vim.api.nvim_win_get_cursor(0))
       local item = p.root:get_item_at(row)
       if item then
-        p.cur_item:setFocused(false)
-        item:setFocused(true)
+        p.cur_item:set_focused(false)
+        item:set_focused(true)
         p.cur_item = item
         local newlines = p.root:get_display_rows(false)
         vim.api.nvim_buf_set_lines(p.id, 0, -1, true, newlines)

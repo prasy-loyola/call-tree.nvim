@@ -64,13 +64,13 @@ function Node:display(level)
 end
 
 ---@param focused boolean
-function Node:setFocused(focused)
+function Node:set_focused(focused)
   if self.focused == focused then
     return
   end
   self.focused = focused
   if self.parent ~= nil then
-    self.parent:setFocused(focused)
+    self.parent:set_focused(focused)
   end
 end
 
@@ -86,15 +86,44 @@ function Node:flatten()
   return self.flattened
 end
 
+
 ---@param refresh boolean
 function Node:get_display_rows(refresh)
   local nodes = refresh and self:flatten() or self.flattened
   local text = {}
-  for _, n in ipairs(nodes) do
+  local last_focused = 0
+
+
+  -- find the line with the last focused item
+  local last_focused_line = 1
+  for i = #nodes, 1, -1 do
+    if nodes[i].focused then
+      last_focused_line = i
+      break
+    end
+  end
+
+  for r, n in ipairs(nodes) do
     local indent = ""
-    local char = n.focused and "-" or " "
-    for _ = 0, n.depth do
-      indent = indent .. char
+    if n.focused then
+      last_focused = n.depth
+    end
+    for i = 0, n.depth do
+      if n.focused then
+        if i == last_focused then
+          indent = indent .. "╰"
+        elseif i > last_focused then
+          indent = indent .. "-"
+        else
+          indent = indent .. " "
+        end
+      else
+        if r < last_focused_line and i-1 == last_focused then
+          indent = indent .. "│"
+        else
+          indent = indent .. " "
+        end
+      end
     end
     table.insert(text, indent .. n.name)
   end
