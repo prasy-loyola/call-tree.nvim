@@ -110,7 +110,7 @@ function Node:get_display_rows(refresh)
     end
     for i = 0, n.depth do
       if n.focused then
-        if i == last_focused then
+        if i == last_focused and last_focused > 0 then
           indent = indent .. "╰"
         elseif i > last_focused then
           indent = indent .. "-"
@@ -125,7 +125,7 @@ function Node:get_display_rows(refresh)
         end
       end
     end
-    table.insert(text, indent .. n.name)
+    table.insert(text, indent .. n.name )
   end
   return text
 end
