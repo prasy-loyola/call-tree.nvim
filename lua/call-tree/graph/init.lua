@@ -108,12 +108,12 @@ function Node:get_display_rows(refresh)
     if n.focused then
       last_focused = n.depth
     end
-    for i = 0, n.depth do
+    for i = 0, n.depth+1 do
       if n.focused then
         if i == last_focused and last_focused > 0 then
           indent = indent .. "╰"
         elseif i > last_focused then
-          indent = indent .. "-"
+          indent = indent .. "─"
         else
           indent = indent .. " "
         end

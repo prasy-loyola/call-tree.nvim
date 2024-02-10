@@ -4,24 +4,25 @@ import (
 	"fmt"
 )
 
-func say(word string) {
-	fmt.Println(word)
+func say(text string) {
+	fmt.Printf(text)
+}
+func world() {
+	say("Hello World1")
 }
 
-func sayHello() {
-	say("hello world")
+func hello1() {
+	world()
 }
 
-func produceWorld() {
-	newWorld()
+func world2() {
+	say("Hello World2")
 }
-
-func newWorld() {
-	sayHello()
+func hello2() {
+	world2()
 }
 
 func main() {
-	sayHello()
-	sayHello()
-	produceWorld()
+	hello1()
+    hello2()
 }
