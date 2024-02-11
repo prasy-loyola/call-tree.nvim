@@ -1,17 +1,18 @@
 local util = vim.lsp.util
+local picker = require('window-picker')
 local graph = require('call-tree.graph')
+picker.setup()
 
 local M = {}
 
 ---@class Config
----@field inverted boolean default(true) should tree be inverted
 ---@field lsp LspConfig
 
 ---@class LspConfig
 ---@field timeout integer default(200ms) timeout for LSP calls
 
 ---@class PluginState private object to store plugin state
----@field private id? integer  bufnr of the call tree buffer
+---@field private bufnr? integer  bufnr of the call tree buffer
 ---@field private wid? integer window id of the call tree window
 ---@field private ctx? LspContext
 ---@field private root? Node
@@ -24,7 +25,6 @@ local p = {
   cur_item = nil,
   root = nil,
   config = {
-    inverted = true,
     lsp = {
       timeout = 200
     },
@@ -52,6 +52,7 @@ local incoming_calls_method = "callHierarchy/incomingCalls"
 ---@param ctx LspContext
 ---@return nil
 local function get_call_locations(item, ctx)
+  print(vim.inspect(ctx))
   local client = vim.lsp.get_client_by_id(ctx.client_id)
   if client then
     local result, err = client.request_sync(incoming_calls_method, { item = item.item }, p.config.lsp.timeout, -1)
@@ -104,40 +105,57 @@ local function expand_function(item)
   end
   get_call_locations(item, p.ctx)
   local lines = p.root:get_display_rows(true)
-  vim.api.nvim_buf_set_lines(p.id, 0, -1, true, lines)
+  vim.api.nvim_buf_set_lines(p.bufnr, 0, -1, true, lines)
 end
 
+local function handle_expand()
+  if not p.cur_item.probed then
+    expand_function(p.cur_item)
+  end
+  p.cur_item.expand = not p.cur_item.expand
+  local newlines = p.root:get_display_rows(true)
+  vim.api.nvim_buf_set_lines(p.bufnr, 0, -1, true, newlines)
+end
+
+local function handle_open()
+  p.cur_item.expand = not p.cur_item.expand
+  local wid = picker.pick_window()
+  vim.api.nvim_set_current_win(wid)
+  vim.cmd.edit(p.cur_item.filename)
+  local start = p.cur_item.item.range.start;
+  vim.api.nvim_win_set_cursor(wid, { start.line + 1, start.character })
+  vim.cmd.norm('zz')
+end
+
+local function handle_cursor_move()
+  local row, _ = unpack(vim.api.nvim_win_get_cursor(0))
+  local item = p.root:get_item_at(row)
+  if item then
+    p.cur_item:set_focused(false)
+    item:set_focused(true)
+    p.cur_item = item
+    local newlines = p.root:get_display_rows(false)
+    vim.api.nvim_buf_set_lines(p.bufnr, 0, -1, true, newlines)
+  end
+end
 
 local function create_window_with_tree()
-  p.id = vim.api.nvim_create_buf(false, true)
+  p.bufnr = vim.api.nvim_create_buf(false, true)
   local lines = p.root:get_display_rows(true)
-  vim.api.nvim_buf_set_lines(p.id, 0, -1, true, lines)
-  p.wid = show_window(p.id)
-  vim.keymap.set('n', '<Tab>', function()
-    if not p.cur_item.probed then
-      expand_function(p.cur_item)
-    end
-    p.cur_item.expand = not p.cur_item.expand
-    local newlines = p.root:get_display_rows(true)
-    vim.api.nvim_buf_set_lines(p.id, 0, -1, true, newlines)
-  end, { buffer = p.id })
+  vim.api.nvim_buf_set_lines(p.bufnr, 0, -1, true, lines)
+  p.wid = show_window(p.bufnr)
+  vim.keymap.set('n', '<Tab>', handle_expand, { buffer = p.bufnr })
+  vim.keymap.set('n', '<S-CR>', handle_open, { buffer = p.bufnr })
+  vim.keymap.set('n', '<CR>', function()
+    handle_open()
+    vim.api.nvim_set_current_win(p.wid)
+  end, { buffer = p.bufnr })
 
   vim.api.nvim_create_autocmd({ "CursorMoved" }, {
-    buffer = p.id,
-    callback = function()
-      local row, _ = unpack(vim.api.nvim_win_get_cursor(0))
-      local item = p.root:get_item_at(row)
-      if item then
-        p.cur_item:set_focused(false)
-        item:set_focused(true)
-        p.cur_item = item
-        local newlines = p.root:get_display_rows(false)
-        vim.api.nvim_buf_set_lines(p.id, 0, -1, true, newlines)
-      end
-    end
+    buffer = p.bufnr,
+    callback = handle_cursor_move
   })
 end
-
 
 --- Show call-tree for the function under cursor
 function M.show_call_tree()
