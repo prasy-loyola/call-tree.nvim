@@ -18,8 +18,9 @@ local M = {}
 ---@field private root? Node
 ---@field private config? Config
 ---@field private cur_item? Node
+---@field private copied_item? Node
 local P = {
-  id = nil,
+  bufnr = nil,
   wid = nil,
   ctx = nil,
   cur_item = nil,
@@ -28,6 +29,7 @@ local P = {
     lsp = {
       timeout = 200
     },
+    copied_item = nil,
   }
 }
 local incoming_calls_method = "callHierarchy/incomingCalls"
@@ -52,7 +54,6 @@ local incoming_calls_method = "callHierarchy/incomingCalls"
 ---@param ctx LspContext
 ---@return nil
 local function get_call_locations(item, ctx)
-  print(vim.inspect(ctx))
   local client = vim.lsp.get_client_by_id(ctx.client_id)
   if client then
     local result, err = client.request_sync(incoming_calls_method, { item = item.item }, P.config.lsp.timeout, -1)
@@ -60,12 +61,12 @@ local function get_call_locations(item, ctx)
       vim.notify(err.message, vim.log.levels.WARN)
       return
     end
-    if not result then return end
+    if not (result and result.result) then return end
 
     for _, call_hierarchy_call in pairs(result.result) do
       ---@type CallHierarchyItem
       local call_site = call_hierarchy_call["from"]
-      item:addIncoming(graph.Node.create(call_site))
+      item:add_incoming(graph.Node.create(call_site, ctx))
     end
     item.probed = true
   else
@@ -91,7 +92,7 @@ local function show_window(buf)
     style = "minimal",
     border = "rounded",
   }
-  local win = vim.api.nvim_open_win(buf, 0, opts)
+  local win = vim.api.nvim_open_win(buf, true, opts)
   -- optional: change highlight, otherwise Pmenu is used
   vim.api.nvim_set_option_value("winhl", "Normal:MyHighlight", { ["win"] = win })
   return win
@@ -171,13 +172,50 @@ function M.show_call_tree()
       --TODO: assuming only 1 call heirarchy, need to support for multiple
       ---@type CallHierarchyItem
       local call_hierarchy_item = result[1]
-      local item = graph.Node.create(call_hierarchy_item)
+      local item = graph.Node.create(call_hierarchy_item, ctx)
       get_call_locations(item, ctx)
       P.ctx = ctx
       P.root = item
       P.cur_item = item
       create_window_with_tree()
     end)
+end
+
+--- Copy the function under cursor, which can then be inserted in the call heirarchy
+function M.copy_function()
+  local params = util.make_position_params()
+  vim.lsp.buf_request(0, "textDocument/prepareCallHierarchy", params,
+    function(err, result, ctx)
+      if err then
+        vim.notify(err.message, vim.log.levels.WARN)
+        return
+      end
+      if not result then return end
+
+      --TODO: assuming only 1 call heirarchy, need to support for multiple
+      ---@type CallHierarchyItem
+      local call_hierarchy_item = result[1]
+      local item = graph.Node.create(call_hierarchy_item, ctx)
+      P.copied_item = item
+    end)
+end
+
+--- Insert the copied function between the current call function and its parent
+function M.insert_copied_function()
+  if P.copied_item == nil or P.cur_item == nil then
+    return
+  end
+  local parent = P.cur_item.parent
+
+  if parent ~= nil then
+    parent:remove_incoming(P.cur_item)
+    parent:add_incoming(P.copied_item)
+  else
+    P.root = P.copied_item
+  end
+  P.copied_item:add_incoming(P.cur_item)
+  local newlines = P.root:get_display_rows(true)
+  vim.api.nvim_buf_set_lines(P.bufnr, 0, -1, true, newlines)
 end
 
 --- Setup call-tree plugin

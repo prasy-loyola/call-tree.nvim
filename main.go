@@ -11,6 +11,9 @@ func world() {
 	say("Hello World1")
 }
 
+func indirect() {
+}
+
 func hello1() {
 	world()
 }

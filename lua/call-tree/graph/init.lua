@@ -21,13 +21,15 @@ local M = {}
 ---@field private flattened Node[]
 ---@field depth integer
 ---@field probed boolean
+---@field ctx LspContext
 Node = {}
 Node.__index = Node
 
 ---Create a new Node
 ---@param item CallHierarchyItem
+---@param ctx LspContext
 ---@return Node
-function Node.create(item)
+function Node.create(item, ctx)
   local self = setmetatable({
     name = item.name,
     item = item,
@@ -36,15 +38,40 @@ function Node.create(item)
     expand = false,
     flattened = {},
     depth = 0,
+    ctx = ctx,
   }, Node)
   return self
 end
 
+
+
+
+function Node:set_depth(depth)
+  self.depth = depth
+  if self.incoming == nil then
+    return
+  end
+
+  for _, v in ipairs(self.incoming) do
+    v:set_depth(depth+1)
+  end
+end
+
 ---@param node Node
-function Node:addIncoming(node)
-  node.depth = self.depth + 1
+function Node:add_incoming(node)
+  node:set_depth(self.depth+1)
   table.insert(self.incoming, node)
   node.parent = self
+end
+
+---@param node Node
+function Node:remove_incoming(node)
+  for i = 1, #self.incoming do
+    if self.incoming[i] == node then
+      table.remove(self.incoming, i)
+      return
+    end
+  end
 end
 
 ---@param level integer
@@ -57,7 +84,6 @@ function Node:display(level)
   for _ = 0, level do
     indent = indent .. char
   end
-  print(indent .. self.name)
   for _, v in ipairs(self.incoming) do
     v:display(level + 1)
   end
@@ -89,7 +115,6 @@ function Node:flatten()
   return self.flattened
 end
 
-
 ---@param refresh boolean
 function Node:get_display_rows(refresh)
   local nodes = refresh and self:flatten() or self.flattened
@@ -111,7 +136,7 @@ function Node:get_display_rows(refresh)
     if n.focused then
       last_focused = n.depth
     end
-    for i = 0, n.depth+1 do
+    for i = 0, n.depth + 1 do
       if n.focused then
         if i == last_focused and last_focused > 0 then
           indent = indent .. "╰"
@@ -121,7 +146,7 @@ function Node:get_display_rows(refresh)
           indent = indent .. " "
         end
       else
-        if r < last_focused_line and i-1 == last_focused then
+        if r < last_focused_line and i - 1 == last_focused then
           indent = indent .. "│"
         else
           indent = indent .. " "
@@ -129,11 +154,11 @@ function Node:get_display_rows(refresh)
       end
     end
     if n.expand then
-      indent = indent.."▼"
+      indent = indent .. "▼"
     else
-      indent = indent.."▶"
+      indent = indent .. "▶"
     end
-    table.insert(text, indent .. n.name )
+    table.insert(text, indent .. n.name .. " " .. n.item.detail)
   end
   return text
 end
