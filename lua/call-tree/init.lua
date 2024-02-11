@@ -18,7 +18,7 @@ local M = {}
 ---@field private root? Node
 ---@field private config? Config
 ---@field private cur_item? Node
-local p = {
+local P = {
   id = nil,
   wid = nil,
   ctx = nil,
@@ -55,7 +55,7 @@ local function get_call_locations(item, ctx)
   print(vim.inspect(ctx))
   local client = vim.lsp.get_client_by_id(ctx.client_id)
   if client then
-    local result, err = client.request_sync(incoming_calls_method, { item = item.item }, p.config.lsp.timeout, -1)
+    local result, err = client.request_sync(incoming_calls_method, { item = item.item }, P.config.lsp.timeout, -1)
     if err and err.message then
       vim.notify(err.message, vim.log.levels.WARN)
       return
@@ -103,56 +103,56 @@ local function expand_function(item)
   if not item or item.probed then
     return
   end
-  get_call_locations(item, p.ctx)
-  local lines = p.root:get_display_rows(true)
-  vim.api.nvim_buf_set_lines(p.bufnr, 0, -1, true, lines)
+  get_call_locations(item, P.ctx)
+  local lines = P.root:get_display_rows(true)
+  vim.api.nvim_buf_set_lines(P.bufnr, 0, -1, true, lines)
 end
 
 local function handle_expand()
-  if not p.cur_item.probed then
-    expand_function(p.cur_item)
+  if not P.cur_item.probed then
+    expand_function(P.cur_item)
   end
-  p.cur_item.expand = not p.cur_item.expand
-  local newlines = p.root:get_display_rows(true)
-  vim.api.nvim_buf_set_lines(p.bufnr, 0, -1, true, newlines)
+  P.cur_item.expand = not P.cur_item.expand
+  local newlines = P.root:get_display_rows(true)
+  vim.api.nvim_buf_set_lines(P.bufnr, 0, -1, true, newlines)
 end
 
 local function handle_open()
-  p.cur_item.expand = not p.cur_item.expand
+  P.cur_item.expand = not P.cur_item.expand
   local wid = picker.pick_window()
   vim.api.nvim_set_current_win(wid)
-  vim.cmd.edit(p.cur_item.filename)
-  local start = p.cur_item.item.range.start;
+  vim.cmd.edit(P.cur_item.filename)
+  local start = P.cur_item.item.range.start;
   vim.api.nvim_win_set_cursor(wid, { start.line + 1, start.character })
   vim.cmd.norm('zz')
 end
 
 local function handle_cursor_move()
   local row, _ = unpack(vim.api.nvim_win_get_cursor(0))
-  local item = p.root:get_item_at(row)
+  local item = P.root:get_item_at(row)
   if item then
-    p.cur_item:set_focused(false)
+    P.cur_item:set_focused(false)
     item:set_focused(true)
-    p.cur_item = item
-    local newlines = p.root:get_display_rows(false)
-    vim.api.nvim_buf_set_lines(p.bufnr, 0, -1, true, newlines)
+    P.cur_item = item
+    local newlines = P.root:get_display_rows(false)
+    vim.api.nvim_buf_set_lines(P.bufnr, 0, -1, true, newlines)
   end
 end
 
 local function create_window_with_tree()
-  p.bufnr = vim.api.nvim_create_buf(false, true)
-  local lines = p.root:get_display_rows(true)
-  vim.api.nvim_buf_set_lines(p.bufnr, 0, -1, true, lines)
-  p.wid = show_window(p.bufnr)
-  vim.keymap.set('n', '<Tab>', handle_expand, { buffer = p.bufnr })
-  vim.keymap.set('n', '<S-CR>', handle_open, { buffer = p.bufnr })
+  P.bufnr = vim.api.nvim_create_buf(false, true)
+  local lines = P.root:get_display_rows(true)
+  vim.api.nvim_buf_set_lines(P.bufnr, 0, -1, true, lines)
+  P.wid = show_window(P.bufnr)
+  vim.keymap.set('n', '<Tab>', handle_expand, { buffer = P.bufnr })
+  vim.keymap.set('n', '<S-CR>', handle_open, { buffer = P.bufnr })
   vim.keymap.set('n', '<CR>', function()
     handle_open()
-    vim.api.nvim_set_current_win(p.wid)
-  end, { buffer = p.bufnr })
+    vim.api.nvim_set_current_win(P.wid)
+  end, { buffer = P.bufnr })
 
   vim.api.nvim_create_autocmd({ "CursorMoved" }, {
-    buffer = p.bufnr,
+    buffer = P.bufnr,
     callback = handle_cursor_move
   })
 end
@@ -173,9 +173,9 @@ function M.show_call_tree()
       local call_hierarchy_item = result[1]
       local item = graph.Node.create(call_hierarchy_item)
       get_call_locations(item, ctx)
-      p.ctx = ctx
-      p.root = item
-      p.cur_item = item
+      P.ctx = ctx
+      P.root = item
+      P.cur_item = item
       create_window_with_tree()
     end)
 end
@@ -183,7 +183,7 @@ end
 --- Setup call-tree plugin
 ---@param opt Config
 function M.setup(opt)
-  p.config = vim.tbl_deep_extend("force", p.config or {}, opt or {})
+  P.config = vim.tbl_deep_extend("force", P.config or {}, opt or {})
 end
 
 return M
