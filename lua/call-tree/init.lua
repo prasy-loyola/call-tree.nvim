@@ -29,8 +29,8 @@ local P = {
     lsp = {
       timeout = 200
     },
-    copied_item = nil,
-  }
+  },
+  copied_item = nil,
 }
 local incoming_calls_method = "callHierarchy/incomingCalls"
 
@@ -105,8 +105,7 @@ local function expand_function(item)
     return
   end
   get_call_locations(item, P.ctx)
-  local lines = P.root:get_display_rows(true)
-  vim.api.nvim_buf_set_lines(P.bufnr, 0, -1, true, lines)
+  M.refresh()
 end
 
 local function handle_expand()
@@ -114,8 +113,7 @@ local function handle_expand()
     expand_function(P.cur_item)
   end
   P.cur_item.expand = not P.cur_item.expand
-  local newlines = P.root:get_display_rows(true)
-  vim.api.nvim_buf_set_lines(P.bufnr, 0, -1, true, newlines)
+  M.refresh()
 end
 
 local function handle_open()
@@ -140,13 +138,49 @@ local function handle_cursor_move()
   end
 end
 
+function M.insert_up()
+  if P.cur_item == nil or P.copied_item == nil then
+    return
+  end
+  M.insert_between_parent(P.cur_item, P.copied_item)
+  P.copied_item.expand = true
+  P.copied_item = nil
+  M.refresh()
+end
+
+function M.insert_down()
+  if P.cur_item == nil or P.copied_item == nil then
+    return
+  end
+  P.cur_item:add_incoming(P.copied_item)
+  P.cur_item.expand = true
+  P.copied_item = nil
+  M.refresh()
+end
+
+function M.remove_current()
+  P.copied_item = P.cur_item
+  if P.cur_item.parent ~= nil then
+    P.cur_item.parent:remove_incoming(P.cur_item)
+  end
+  M.refresh()
+end
+
+
+function M.refresh()
+  local newlines = P.root:get_display_rows(true)
+  vim.api.nvim_buf_set_lines(P.bufnr, 0, -1, true, newlines)
+end
+
 local function create_window_with_tree()
   P.bufnr = vim.api.nvim_create_buf(false, true)
-  local lines = P.root:get_display_rows(true)
-  vim.api.nvim_buf_set_lines(P.bufnr, 0, -1, true, lines)
+  M.refresh()
   P.wid = show_window(P.bufnr)
   vim.keymap.set('n', '<Tab>', handle_expand, { buffer = P.bufnr })
   vim.keymap.set('n', '<S-CR>', handle_open, { buffer = P.bufnr })
+  vim.keymap.set('n', 'dd', M.remove_current, { buffer = P.bufnr })
+  vim.keymap.set('n', 'P', M.insert_up, { buffer = P.bufnr })
+  vim.keymap.set('n', 'p', M.insert_down, { buffer = P.bufnr })
   vim.keymap.set('n', '<CR>', function()
     handle_open()
     vim.api.nvim_set_current_win(P.wid)
@@ -201,21 +235,18 @@ function M.copy_function()
 end
 
 --- Insert the copied function between the current call function and its parent
-function M.insert_copied_function()
-  if P.copied_item == nil or P.cur_item == nil then
-    return
-  end
-  local parent = P.cur_item.parent
+---@param cur_item Node
+---@param item Node
+function M.insert_between_parent(cur_item, item)
+  local parent = cur_item.parent
 
   if parent ~= nil then
-    parent:remove_incoming(P.cur_item)
-    parent:add_incoming(P.copied_item)
+    parent:remove_incoming(cur_item)
+    parent:add_incoming(item)
   else
-    P.root = P.copied_item
+    P.root = item
   end
-  P.copied_item:add_incoming(P.cur_item)
-  local newlines = P.root:get_display_rows(true)
-  vim.api.nvim_buf_set_lines(P.bufnr, 0, -1, true, newlines)
+  item:add_incoming(P.cur_item)
 end
 
 --- Setup call-tree plugin
