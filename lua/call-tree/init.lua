@@ -1,6 +1,7 @@
 local util = vim.lsp.util
 local picker = require('window-picker')
 local graph = require('call-tree.graph')
+local namespace_id = vim.api.nvim_create_namespace("CallTreeNamespace")
 picker.setup()
 
 local M = {}
@@ -126,6 +127,33 @@ local function handle_open()
   vim.cmd.norm('zz')
 end
 
+---@param hl_group HighlightGroups
+local function set_higilights(hl_group)
+  for _, group in ipairs(hl_group) do
+    local start = 0
+    local endPos = group.indent
+    local line = group.line - 1
+    print(vim.inspect(group))
+    vim.api.nvim_buf_set_extmark(P.bufnr, namespace_id, line, start,
+      { end_row = line, end_col = endPos, hl_group = 'NonText' })
+
+    start = endPos
+    endPos = endPos + group.name
+    vim.api.nvim_buf_set_extmark(P.bufnr, namespace_id, line, start,
+      { end_row = line, end_col = endPos, hl_group = 'Function' })
+
+    start = endPos
+    endPos = endPos + group.notes
+    vim.api.nvim_buf_set_extmark(P.bufnr, namespace_id, line, start,
+      { end_row = line, end_col = endPos, hl_group = 'SpecialComment' })
+
+    start = endPos
+    endPos = endPos + group.detail
+    vim.api.nvim_buf_set_extmark(P.bufnr, namespace_id, line, start,
+      { end_row = line, end_col = endPos, hl_group = 'Label' })
+  end
+end
+
 local function handle_cursor_move()
   local row, _ = unpack(vim.api.nvim_win_get_cursor(0))
   local item = P.root:get_item_at(row)
@@ -133,8 +161,9 @@ local function handle_cursor_move()
     P.cur_item:set_focused(false)
     item:set_focused(true)
     P.cur_item = item
-    local newlines = P.root:get_display_rows(false)
+    local newlines, higroups = P.root:get_display_rows(false)
     vim.api.nvim_buf_set_lines(P.bufnr, 0, -1, true, newlines)
+    set_higilights(higroups)
   end
 end
 
@@ -166,10 +195,10 @@ function M.remove_current()
   M.refresh()
 end
 
-
 function M.refresh()
-  local newlines = P.root:get_display_rows(true)
+  local newlines, higroups = P.root:get_display_rows(true)
   vim.api.nvim_buf_set_lines(P.bufnr, 0, -1, true, newlines)
+  set_higilights(higroups)
 end
 
 local function create_window_with_tree()
@@ -187,8 +216,8 @@ local function create_window_with_tree()
   end, { buffer = P.bufnr })
 
   vim.keymap.set('n', 'i', function()
-    local input = vim.fn.input({prompt = "Notes:", default = ""})
-    P.cur_item:add_notes("("..input..") ")
+    local input = vim.fn.input({ prompt = "Notes:", default = "" })
+    P.cur_item:add_notes("(" .. input .. ") ")
     M.refresh()
   end, { buffer = P.bufnr })
 
@@ -264,11 +293,14 @@ end
 function M.focus()
   if vim.api.nvim_win_is_valid(P.wid) then
     vim.api.nvim_set_current_win(P.wid)
-  else 
+  else
     create_window_with_tree()
   end
+end
 
-
+function M.init_highlights()
+  vim.api.nvim_command('highlight default HighlightLine guifg=#ff007c gui=bold ctermfg=198 cterm=bold ctermbg=darkgreen')
+  namespace_id = vim.api.nvim_create_namespace('CallTreeNamespace')
 end
 
 return M

@@ -117,12 +117,21 @@ function Node:flatten()
   return self.flattened
 end
 
+
+---@class HighlightGroups
+---@field line integer
+---@field indent integer
+---@field name integer
+---@field notes integer
+---@field detail integer
+
 ---@param refresh boolean
 function Node:get_display_rows(refresh)
   local nodes = refresh and self:flatten() or self.flattened
   local text = {}
+  ---@type HighlightGroups[]
+  local higroups = {}
   local last_focused = 0
-
 
   -- find the line with the last focused item
   local last_focused_line = 1
@@ -161,8 +170,9 @@ function Node:get_display_rows(refresh)
       indent = indent .. "▶"
     end
     table.insert(text, indent .. n.name .. " " .. n.notes .. n.item.detail)
+    table.insert(higroups, {line = r, indent = #indent, name=#n.name+1, notes=#n.notes, detail=#n.item.detail})
   end
-  return text
+  return text, higroups
 end
 
 ---@param notes string
