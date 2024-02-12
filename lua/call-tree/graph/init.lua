@@ -22,6 +22,7 @@ local M = {}
 ---@field depth integer
 ---@field probed boolean
 ---@field ctx LspContext
+---@field notes string
 Node = {}
 Node.__index = Node
 
@@ -39,6 +40,7 @@ function Node.create(item, ctx)
     flattened = {},
     depth = 0,
     ctx = ctx,
+    notes = "",
   }, Node)
   return self
 end
@@ -158,9 +160,14 @@ function Node:get_display_rows(refresh)
     else
       indent = indent .. "▶"
     end
-    table.insert(text, indent .. n.name .. " " .. n.item.detail)
+    table.insert(text, indent .. n.name .. " " .. n.notes .. n.item.detail)
   end
   return text
+end
+
+---@param notes string
+function Node:add_notes(notes)
+  self.notes = notes
 end
 
 ---@return Node?

@@ -186,6 +186,12 @@ local function create_window_with_tree()
     vim.api.nvim_set_current_win(P.wid)
   end, { buffer = P.bufnr })
 
+  vim.keymap.set('n', 'i', function()
+    local input = vim.fn.input({prompt = "Notes:", default = ""})
+    P.cur_item:add_notes("("..input..") ")
+    M.refresh()
+  end, { buffer = P.bufnr })
+
   vim.api.nvim_create_autocmd({ "CursorMoved" }, {
     buffer = P.bufnr,
     callback = handle_cursor_move
