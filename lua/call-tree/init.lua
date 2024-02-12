@@ -255,4 +255,14 @@ function M.setup(opt)
   P.config = vim.tbl_deep_extend("force", P.config or {}, opt or {})
 end
 
+function M.focus()
+  if vim.api.nvim_win_is_valid(P.wid) then
+    vim.api.nvim_set_current_win(P.wid)
+  else 
+    create_window_with_tree()
+  end
+
+
+end
+
 return M
