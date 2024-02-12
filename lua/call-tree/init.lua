@@ -133,9 +133,8 @@ local function set_higilights(hl_group)
     local start = 0
     local endPos = group.indent
     local line = group.line - 1
-    print(vim.inspect(group))
     vim.api.nvim_buf_set_extmark(P.bufnr, namespace_id, line, start,
-      { end_row = line, end_col = endPos, hl_group = 'NonText' })
+      { end_row = line, end_col = endPos, hl_group = 'WinBar' })
 
     start = endPos
     endPos = endPos + group.name
@@ -296,11 +295,6 @@ function M.focus()
   else
     create_window_with_tree()
   end
-end
-
-function M.init_highlights()
-  vim.api.nvim_command('highlight default HighlightLine guifg=#ff007c gui=bold ctermfg=198 cterm=bold ctermbg=darkgreen')
-  namespace_id = vim.api.nvim_create_namespace('CallTreeNamespace')
 end
 
 return M

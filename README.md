@@ -7,6 +7,8 @@ A neovim plugin to display call heirarchy of a function using LSPs already attac
 - [x] \<Enter\> key to load the file in a different window
 - [x] \<Shift-Enter\> key to open the file in a different window and move to that window
 - [x] Manually add a function to the call Heirarchy (useful to link event based subscribers/publishers)
+- [x] `P` to add the copied function function between the current under cursor and it's parent
+- [x] `p` to add the copied function as incoming call to the current function under cursor
 - [ ] Telescope integration
 - [ ] Show preview of the call location under the cursor
 
